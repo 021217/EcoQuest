@@ -1,4 +1,4 @@
-package com.example.ecoquest
+package com.freerider.ecoquest
 
 import io.flutter.embedding.android.FlutterActivity
 
