@@ -35,10 +35,10 @@ android {
 
     defaultConfig {
         applicationId = "com.freerider.ecoquest"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        minSdk = 23 // ✅ Change this from 21 to 23
+        targetSdk = 33 // or latest version
+        versionCode = 1
+        versionName = "1.0"
     }
 
     buildTypes {
