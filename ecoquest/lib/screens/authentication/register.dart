@@ -1,37 +1,50 @@
+import 'package:ecoquest/screens/authentication/signIn.dart';
 import 'package:ecoquest/screens/home/home.dart';
-import 'package:ecoquest/screens/authentication/register.dart'; // Register screen import
+import 'package:ecoquest/services/auth.dart';
 import 'package:ecoquest/services/sharedpreferences.dart'; // ✅ Import shared preferences
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class SignIn extends StatefulWidget {
+class Register extends StatefulWidget {
   @override
-  _SignInState createState() => _SignInState();
+  _RegisterState createState() => _RegisterState();
 }
 
-class _SignInState extends State<SignIn> {
+class _RegisterState extends State<Register> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final _formKey = GlobalKey<FormState>(); // ✅ Form key for validation
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
   String? errorMessage;
 
-  Future<void> _signIn() async {
+  Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
       try {
-        await _auth.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
+        final authService = AuthService();
+
+        // ✅ Call AuthService to Register & Save in Firestore
+        final newUser = await authService.registerWithEmailAndPassword(
+          _emailController.text.trim(),
+          _passwordController.text.trim(),
+          _nameController.text.trim(),
         );
 
-        // ✅ Save the signed-in status in SharedPreferences
-        await PreferencesHelper.setUserSignedIn(true);
-
-        // ✅ Navigate to HomeScreen after signing in
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
-        );
+        if (newUser != null) {
+          await PreferencesHelper.setUserSignedIn(
+            true,
+          ); // ✅ Save sign-in status
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => HomeScreen()),
+          );
+        } else {
+          setState(() {
+            errorMessage = "Failed to register user. Try again.";
+          });
+        }
       } catch (e) {
         setState(() {
           errorMessage = e.toString();
@@ -46,7 +59,7 @@ class _SignInState extends State<SignIn> {
       extendBodyBehindAppBar: true, // ✅ Extends background behind AppBar
       appBar: AppBar(
         title: Text(
-          'Sign In',
+          'Register',
           style: TextStyle(color: Colors.white), // ✅ White title
         ),
         backgroundColor: Colors.transparent, // ✅ Transparent AppBar
@@ -57,13 +70,11 @@ class _SignInState extends State<SignIn> {
             onPressed: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => Register(),
-                ), // ✅ Navigate to Register
+                MaterialPageRoute(builder: (context) => SignIn()),
               );
             },
             child: Text(
-              'Register',
+              'Sign In',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -111,6 +122,28 @@ class _SignInState extends State<SignIn> {
                         style: TextStyle(color: Colors.red),
                       ),
                     ),
+
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'Enter your name',
+                      prefixIcon: Icon(Icons.person, color: Colors.brown),
+                      filled: true,
+                      fillColor: Colors.white.withAlpha(230),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty)
+                        return 'Enter your name';
+                      return null;
+                    },
+                  ),
+
+                  SizedBox(height: 16),
+
                   TextFormField(
                     controller: _emailController,
                     decoration: InputDecoration(
@@ -158,11 +191,35 @@ class _SignInState extends State<SignIn> {
 
                   SizedBox(height: 16),
 
-                  // ✅ Sign In Button
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm Password',
+                      hintText: 'Re-enter your password',
+                      prefixIcon: Icon(Icons.lock_outline, color: Colors.brown),
+                      filled: true,
+                      fillColor: Colors.white.withAlpha(230),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty)
+                        return 'Re-enter your password';
+                      if (value != _passwordController.text)
+                        return 'Passwords do not match';
+                      return null;
+                    },
+                  ),
+
+                  SizedBox(height: 16),
+
+                  // ✅ Register Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _signIn,
+                      onPressed: _register,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.brown,
                         padding: EdgeInsets.symmetric(vertical: 16),
@@ -171,31 +228,12 @@ class _SignInState extends State<SignIn> {
                         ),
                       ),
                       child: Text(
-                        'Sign In',
+                        'Register',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 10),
-
-                  // ✅ "Forget Password?" Text Button
-                  TextButton(
-                    onPressed: () {
-                      print(
-                        "Forget Password tapped!",
-                      ); // TODO: Implement password reset navigation
-                    },
-                    child: Text(
-                      'Forget Password?',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),

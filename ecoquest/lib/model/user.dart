@@ -1,58 +1,52 @@
-class User {
+class MyUser {
   final String uid;
   final String name;
   final String email;
   final String? password; // Nullable if using Google Login
   final bool googleLogin;
   final String profilePic;
-  final bool audioEnabled;
-  final bool notificationEnabled;
   final String qrCode;
   final String referralCode;
-  final String status;
+  final int status; // ✅ Changed to integer (1 = active, 0 = inactive)
   final DateTime createdDate;
   final DateTime lastUpdateDate;
 
-  User({
+  MyUser({
     required this.uid,
     required this.name,
     required this.email,
     this.password,
     required this.googleLogin,
     required this.profilePic,
-    required this.audioEnabled,
-    required this.notificationEnabled,
     required this.qrCode,
     required this.referralCode,
-    required this.status,
+    required this.status, // ✅ Integer status
     required this.createdDate,
     required this.lastUpdateDate,
   });
 
-  // Factory constructor to create a User object from a Map (e.g., Firestore document)
-  factory User.fromMap(Map<String, dynamic> map, String documentId) {
-    return User(
+  // ✅ Convert Firestore data to MyUser object
+  factory MyUser.fromMap(Map<String, dynamic> map, String documentId) {
+    return MyUser(
       uid: documentId,
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       password: map['password'],
       googleLogin: map['googleLogin'] ?? false,
       profilePic: map['profilePic'] ?? '',
-      audioEnabled: map['audioEnabled'] ?? false,
-      notificationEnabled: map['notificationEnabled'] ?? false,
       qrCode: map['qrCode'] ?? '',
       referralCode: map['referralCode'] ?? '',
-      status: map['status'] ?? 'inactive',
-      createdDate: DateTime.parse(
-        map['createdDate'] ?? DateTime.now().toIso8601String(),
-      ),
-      lastUpdateDate: DateTime.parse(
-        map['lastUpdateDate'] ?? DateTime.now().toIso8601String(),
-      ),
+      status:
+          (map['status'] as num?)?.toInt() ??
+          0, // ✅ Converts Firestore value safely
+      createdDate:
+          DateTime.tryParse(map['createdDate'] ?? '') ?? DateTime.now(),
+      lastUpdateDate:
+          DateTime.tryParse(map['lastUpdateDate'] ?? '') ?? DateTime.now(),
     );
   }
 
-  // Method to convert a User object to a Map (e.g., for Firestore document)
+  // ✅ Convert MyUser object to Firestore document
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -60,11 +54,9 @@ class User {
       'password': password,
       'googleLogin': googleLogin,
       'profilePic': profilePic,
-      'audioEnabled': audioEnabled,
-      'notificationEnabled': notificationEnabled,
       'qrCode': qrCode,
       'referralCode': referralCode,
-      'status': status,
+      'status': status, // ✅ Stores as integer
       'createdDate': createdDate.toIso8601String(),
       'lastUpdateDate': lastUpdateDate.toIso8601String(),
     };
