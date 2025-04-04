@@ -76,6 +76,13 @@ flutter:
     - assets/sounds/click.mp3
     - assets/images/background.webp
     - assets/images/icon.webp
+    - assets/images/NightBg.webp
+    - assets/images/DayBg.webp
+    - assets/images/Ground.webp
+    - assets/images/seed.webp
+    - assets/images/sprout.webp
+    - assets/images/sapling.webp
+    - assets/images/tree.webp
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
