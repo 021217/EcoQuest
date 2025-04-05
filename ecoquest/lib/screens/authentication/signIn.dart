@@ -15,8 +15,12 @@ class _SignInState extends State<SignIn> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String? errorMessage;
+  bool isLoading = false; // ✅ Loading state
 
   Future<void> _signIn() async {
+    setState(() {
+      isLoading = true; // ✅ Set loading state to true
+    });
     if (_formKey.currentState!.validate()) {
       try {
         await _auth.signInWithEmailAndPassword(
@@ -38,6 +42,9 @@ class _SignInState extends State<SignIn> {
         });
       }
     }
+    setState(() {
+      isLoading = false; // ✅ Set loading state to false
+    });
   }
 
   @override
@@ -74,137 +81,149 @@ class _SignInState extends State<SignIn> {
         ],
         automaticallyImplyLeading: false,
       ),
-      body: Stack(
-        children: [
-          // ✅ Full-Screen Background Image
-          Positioned.fill(
-            child: Stack(
-              children: [
-                Container(
-                  decoration: const BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage('assets/images/background.webp'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                Container(
-                  color: Colors.black.withOpacity(0.5), // ✅ Dark overlay
-                ),
-              ],
-            ),
-          ),
-
-          // ✅ Form Contents
-          Padding(
-            padding: const EdgeInsets.all(50.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body:
+          isLoading
+              ? Center(child: CircularProgressIndicator())
+              : Stack(
                 children: [
-                  if (errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        errorMessage!,
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      hintText: 'Enter your email',
-                      prefixIcon: Icon(Icons.email, color: Colors.brown),
-                      filled: true,
-                      fillColor: Colors.white.withAlpha(230),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty)
-                        return 'Enter your email';
-                      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value))
-                        return 'Enter a valid email';
-                      return null;
-                    },
-                  ),
-
-                  SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      hintText: 'Enter your password',
-                      prefixIcon: Icon(Icons.lock, color: Colors.brown),
-                      filled: true,
-                      fillColor: Colors.white.withAlpha(230),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty)
-                        return 'Enter your password';
-                      if (value.length < 6)
-                        return 'Password must be at least 6 characters';
-                      return null;
-                    },
-                  ),
-
-                  SizedBox(height: 16),
-
-                  // ✅ Sign In Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _signIn,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.brown,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  // ✅ Full-Screen Background Image
+                  Positioned.fill(
+                    child: Stack(
+                      children: [
+                        Container(
+                          decoration: const BoxDecoration(
+                            image: DecorationImage(
+                              image: AssetImage(
+                                'assets/images/background.webp',
+                              ),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'Sign In',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                        Container(
+                          color: Colors.black.withOpacity(
+                            0.5,
+                          ), // ✅ Dark overlay
                         ),
-                      ),
+                      ],
                     ),
                   ),
 
-                  SizedBox(height: 10),
+                  // ✅ Form Contents
+                  Padding(
+                    padding: const EdgeInsets.all(50.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (errorMessage != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                errorMessage!,
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          TextFormField(
+                            controller: _emailController,
+                            decoration: InputDecoration(
+                              labelText: 'Email',
+                              hintText: 'Enter your email',
+                              prefixIcon: Icon(
+                                Icons.email,
+                                color: Colors.brown,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withAlpha(230),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty)
+                                return 'Enter your email';
+                              if (!RegExp(
+                                r'^[^@]+@[^@]+\.[^@]+',
+                              ).hasMatch(value))
+                                return 'Enter a valid email';
+                              return null;
+                            },
+                          ),
 
-                  // ✅ "Forget Password?" Text Button
-                  TextButton(
-                    onPressed: () {
-                      print(
-                        "Forget Password tapped!",
-                      ); // TODO: Implement password reset navigation
-                    },
-                    child: Text(
-                      'Forget Password?',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                          SizedBox(height: 16),
+
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              hintText: 'Enter your password',
+                              prefixIcon: Icon(Icons.lock, color: Colors.brown),
+                              filled: true,
+                              fillColor: Colors.white.withAlpha(230),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty)
+                                return 'Enter your password';
+                              if (value.length < 6)
+                                return 'Password must be at least 6 characters';
+                              return null;
+                            },
+                          ),
+
+                          SizedBox(height: 16),
+
+                          // ✅ Sign In Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _signIn,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.brown,
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Sign In',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(height: 10),
+
+                          // ✅ "Forget Password?" Text Button
+                          TextButton(
+                            onPressed: () {
+                              print(
+                                "Forget Password tapped!",
+                              ); // TODO: Implement password reset navigation
+                            },
+                            child: Text(
+                              'Forget Password?',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

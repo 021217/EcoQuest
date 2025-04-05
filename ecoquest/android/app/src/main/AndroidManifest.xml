@@ -1,8 +1,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+        <!-- Camera Permission -->
+        <uses-permission android:name="android.permission.CAMERA" />
+        
+        <!-- Location Permissions -->
+        <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+        <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+        
+        <!-- Storage Permissions (only one declaration) -->
+        <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+        <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+        
+        <!-- For Android 10 and below, and scoped storage -->
+        <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+
+        <!-- For Internet Access -->
+        <uses-permission android:name="android.permission.INTERNET" />
+        
+        <!-- For accessing photo gallery (Android 10+) -->
+        <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:maxSdkVersion="33" />
+        <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:maxSdkVersion="33" />
     <application
         android:label="ecoquest"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
+
+        
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

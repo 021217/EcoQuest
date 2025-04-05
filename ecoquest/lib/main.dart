@@ -41,7 +41,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       AudioManager.pauseBackgroundMusic(); // ✅ Pause when app is minimized
     } else if (state == AppLifecycleState.resumed) {
-      AudioManager.resumeBackgroundMusic(); // ✅ Resume when app is reopened
+      _checkAudioPreference();
+      if (isAudioEnabled) {
+        AudioManager.resumeBackgroundMusic(); // ✅ Resume when app is reopened
+      }
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:ecoquest/screens/profile/profilesettingsscreen.dart';
 import 'package:flutter/material.dart';
 import 'package:ecoquest/services/auth.dart';
 import 'package:ecoquest/model/user.dart';
@@ -159,8 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   //get time
-  bool isDayTime(){
-    DateTime now = DateTime.now().toUtc().add(const Duration(hours: 8)); //Malaysia time
+  bool isDayTime() {
+    DateTime now = DateTime.now().toUtc().add(
+      const Duration(hours: 8),
+    ); //Malaysia time
     int hour = now.hour;
 
     //int hour = 20; //handle time manually, for debug and testing purpose
@@ -171,10 +174,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return hour >= 6 && hour < 18; //daytime between 6am to 6pm
   }
 
-  void _onItemTapped(int index){
+  void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+
+    if (index == 4) {
+      // index of the profile/settings item
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ProfileSettingsScreen()),
+      );
+    }
   }
 
   // for futher development to update the progress
@@ -198,7 +209,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String bgImage = isDayTime() ? 'assets/images/DayBg.webp' : 'assets/images/NightBg.webp'; // Switch images
+    String bgImage =
+        isDayTime()
+            ? 'assets/images/DayBg.webp'
+            : 'assets/images/NightBg.webp'; // Switch images
     Color progressBarTextColor = isDayTime() ? Colors.black : Colors.white;
     String virtualTree = getImageForProgress();
     return Scaffold(
@@ -206,12 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Stack(
           children: [
             // Background Image
-            Positioned.fill(
-              child: Image.asset(
-                bgImage,
-                fit: BoxFit.fill,
-              ),
-            ),
+            Positioned.fill(child: Image.asset(bgImage, fit: BoxFit.fill)),
 
             // Ground Image at Bottom
             Positioned(
@@ -236,9 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Center(
                   child: Align(
                     alignment: Alignment.bottomCenter,
-                    child: Image.asset(
-                      virtualTree,
-                    ),
+                    child: Image.asset(virtualTree),
                   ),
                 ),
               ),
@@ -270,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
-// Add a Column to stack ProgressBar & Bottom Navigation
+      // Add a Column to stack ProgressBar & Bottom Navigation
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -311,11 +318,26 @@ class _HomeScreenState extends State<HomeScreen> {
             currentIndex: _selectedIndex,
             onTap: _onItemTapped,
             items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.group, size: 40,), label: 'Friends'),
-              BottomNavigationBarItem(icon: Icon(Icons.store, size: 40,), label: 'Market'),
-              BottomNavigationBarItem(icon: Icon(Icons.home, size: 40,), label: 'Home'),
-              BottomNavigationBarItem(icon: Icon(Icons.book, size: 40,), label: 'Eco Tips'),
-              BottomNavigationBarItem(icon: Icon(Icons.person, size: 40,), label: 'Profile'),
+              BottomNavigationBarItem(
+                icon: Hero(tag: 'friends', child: Icon(Icons.group, size: 40)),
+                label: 'Friends',
+              ),
+              BottomNavigationBarItem(
+                icon: Hero(tag: 'market', child: Icon(Icons.store, size: 40)),
+                label: 'Market',
+              ),
+              BottomNavigationBarItem(
+                icon: Hero(tag: 'home', child: Icon(Icons.home, size: 40)),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Hero(tag: 'eco-tips', child: Icon(Icons.book, size: 40)),
+                label: 'Eco Tips',
+              ),
+              BottomNavigationBarItem(
+                icon: Hero(tag: 'profile', child: Icon(Icons.person, size: 40)),
+                label: 'Profile',
+              ),
             ],
           ),
         ],
