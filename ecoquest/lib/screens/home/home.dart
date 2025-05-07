@@ -1,6 +1,7 @@
 import 'package:ecoquest/screens/marketplace/marketplacescreen.dart';
 import 'package:ecoquest/screens/profile/profilesettingsscreen.dart';
 import 'package:ecoquest/screens/social/friendlistscreen.dart';
+import 'package:ecoquest/screens/tips/ecotipsscreen.dart';
 import 'package:flutter/material.dart';
 import 'package:ecoquest/services/auth.dart';
 import 'package:ecoquest/model/user.dart';
@@ -191,6 +192,12 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const MarketplaceScreen()),
+      );
+    } else if (index == 3) {
+      // index of the profile/settings item
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const EcoTipsScreen()),
       );
     } else if (index == 4) {
       // index of the profile/settings item
