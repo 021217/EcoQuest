@@ -2,7 +2,8 @@ import 'package:ecoquest/screens/home/home.dart';
 import 'package:ecoquest/screens/authentication/register.dart'; // Register screen import
 import 'package:ecoquest/services/sharedpreferences.dart'; // ✅ Import shared preferences
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class SignIn extends StatefulWidget {
   @override
@@ -10,7 +11,6 @@ class SignIn extends StatefulWidget {
 }
 
 class _SignInState extends State<SignIn> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final _formKey = GlobalKey<FormState>(); // ✅ Form key for validation
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -19,31 +19,52 @@ class _SignInState extends State<SignIn> {
 
   Future<void> _signIn() async {
     setState(() {
-      isLoading = true; // ✅ Set loading state to true
+      isLoading = true;
     });
+
     if (_formKey.currentState!.validate()) {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
       try {
-        await _auth.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
+        final response = await http.post(
+          Uri.parse(
+            'https://ecoquest.ruputech.com/login.php',
+          ), // 🔁 Replace with your backend URL
+          body: {'email': email, 'password': password},
         );
 
-        // ✅ Save the signed-in status in SharedPreferences
-        await PreferencesHelper.setUserSignedIn(true);
+        final data = jsonDecode(response.body);
 
-        // ✅ Navigate to HomeScreen after signing in
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
-        );
+        if (data['success'] && data['user'] != null) {
+          final user = data['user'] ?? null; // ✅ Check if user data exists
+          print(user); // ✅ Debugging line
+          String userId = user['uid']?.toString() ?? '';
+          String userName = user['name']?.toString() ?? '';
+          // ✅ Save logged-in status
+          await PreferencesHelper.setUserSignedIn(true);
+          await PreferencesHelper.setUserID(userId); // ✅ Save user ID
+          await PreferencesHelper.setUserName(userName); // ✅ Save user name
+
+          // ✅ Navigate to home screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => HomeScreen()),
+          );
+        } else {
+          setState(() {
+            errorMessage = data['message'] ?? 'Login failed';
+          });
+        }
       } catch (e) {
         setState(() {
-          errorMessage = e.toString();
+          errorMessage = 'Error: $e';
         });
       }
     }
+
     setState(() {
-      isLoading = false; // ✅ Set loading state to false
+      isLoading = false;
     });
   }
 

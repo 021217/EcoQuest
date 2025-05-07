@@ -1,9 +1,9 @@
 import 'package:ecoquest/screens/authentication/signIn.dart';
 import 'package:ecoquest/screens/home/home.dart';
-import 'package:ecoquest/services/auth.dart';
 import 'package:ecoquest/services/sharedpreferences.dart'; // ✅ Import shared preferences
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class Register extends StatefulWidget {
   @override
@@ -11,7 +11,6 @@ class Register extends StatefulWidget {
 }
 
 class _RegisterState extends State<Register> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final _formKey = GlobalKey<FormState>(); // ✅ Form key for validation
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -22,32 +21,42 @@ class _RegisterState extends State<Register> {
 
   Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
-      try {
-        final authService = AuthService();
+      final name = _nameController.text.trim();
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
 
-        // ✅ Call AuthService to Register & Save in Firestore
-        final newUser = await authService.registerWithEmailAndPassword(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-          _nameController.text.trim(),
+      try {
+        final response = await http.post(
+          Uri.parse(
+            'https://ecoquest.ruputech.com/register.php',
+          ), // ✅ Replace with your IP or domain
+          body: {'name': name, 'email': email, 'password': password},
         );
 
-        if (newUser != null) {
-          await PreferencesHelper.setUserSignedIn(
-            true,
-          ); // ✅ Save sign-in status
+        final data = jsonDecode(response.body);
+        final user = data['user'] ?? null; // ✅ Check if user data exists
+        print(user); // ✅ Debugging line
+        String userId = user['uid']?.toString() ?? '';
+        String userName = user['name']?.toString() ?? '';
+        if (data['success']) {
+          // ✅ Save logged-in status
+          await PreferencesHelper.setUserSignedIn(true);
+          await PreferencesHelper.setUserID(userId); // ✅ Save user ID
+          await PreferencesHelper.setUserName(userName); // ✅ Save user name
+
+          // ✅ Go to home screen
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => HomeScreen()),
           );
         } else {
           setState(() {
-            errorMessage = "Failed to register user. Try again.";
+            errorMessage = data['message'] ?? 'Registration failed.';
           });
         }
       } catch (e) {
         setState(() {
-          errorMessage = e.toString();
+          errorMessage = 'Error: $e';
         });
       }
     }

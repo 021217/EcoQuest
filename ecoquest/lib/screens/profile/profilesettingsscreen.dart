@@ -1,17 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:ecoquest/main.dart';
-import 'package:ecoquest/screens/authentication/signIn.dart';
-import 'package:ecoquest/services/audiomanager.dart';
-import 'package:ecoquest/services/auth.dart';
-import 'package:ecoquest/services/permissionhelper.dart';
-import 'package:ecoquest/services/sharedpreferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
-import 'dart:io';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:ecoquest/services/sharedpreferences.dart';
+import 'package:ecoquest/services/audiomanager.dart';
+import 'package:ecoquest/main.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -21,8 +16,6 @@ class ProfileSettingsScreen extends StatefulWidget {
 }
 
 class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ImagePicker _picker = ImagePicker();
 
   String name = "";
@@ -30,36 +23,43 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   bool audioEnabled = true;
   bool notificationEnabled = true;
   String userId = "";
-  bool isLoading = false; // ✅ Loading state for image upload
+  bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    fetchUserData();
+    loadUserData();
     _checkAudioPreference();
   }
 
-  Future<void> fetchUserData() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      DocumentSnapshot snapshot =
-          await _firestore.collection("users").doc(user.uid).get();
-      Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
+  Future<void> loadUserData() async {
+    final uid = await PreferencesHelper.getUserID();
+    print("User ID: $uid");
+    setState(() {
+      userId = uid ?? "";
+    });
+    if (userId.isEmpty) return;
 
-      setState(() {
-        name = data["name"] ?? "";
-        profilePic = data["profilePic"] ?? "";
-        userId = user.uid;
-      });
+    final response = await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/get_user.php?" + "uid=$userId"),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['success']) {
+        setState(() {
+          name = data['user']['name'] ?? "";
+          profilePic = data['user']['profile_pic'] ?? "";
+        });
+      }
     }
   }
 
   void _checkAudioPreference() async {
     bool savedAudioState = await PreferencesHelper.getAudioEnabled();
     setState(() {
-      audioEnabled = savedAudioState; // ✅ Update UI with stored value
+      audioEnabled = savedAudioState;
     });
-    print("Loaded Audio Preference: $audioEnabled");
   }
 
   void _toggleAudio() async {
@@ -73,17 +73,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
 
     setState(() {
-      audioEnabled = newAudioState; // ✅ Update UI when toggling
+      audioEnabled = newAudioState;
     });
-
-    print("Audio toggled: ${newAudioState ? 'ON' : 'OFF'}");
   }
 
   Future<void> updateUserData(String key, dynamic value) async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      await _firestore.collection("users").doc(user.uid).update({key: value});
-    }
+    await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/update_profile.php"),
+      body: {'uid': userId, key: value.toString()},
+    );
   }
 
   Future<void> uploadProfilePicture() async {
@@ -97,8 +95,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       List<int> imageBytes = await file.readAsBytes();
       String base64Image = base64Encode(imageBytes);
 
-      const String clientId =
-          '76e9648bc192561'; // Replace with your actual Imgur Client ID
+      const String clientId = '76e9648bc192561';
       final url = Uri.parse('https://api.imgur.com/3/image');
 
       final response = await http.post(
@@ -140,9 +137,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             content: TextField(controller: controller),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
+                onPressed: () => Navigator.pop(context),
                 child: Text("Cancel"),
               ),
               ElevatedButton(
@@ -168,6 +163,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     ).showSnackBar(SnackBar(content: Text("User ID copied to clipboard")));
   }
 
+  void _logout() async {
+    await PreferencesHelper.clearUser();
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => MyApp()),
+      (Route<dynamic> route) => false,
+    );
+  }
+
+  // 🔁 Build method stays unchanged — UI code reused from previous version
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -406,16 +411,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           const SizedBox(height: 20),
                           GestureDetector(
                             onTap: () async {
-                              await AuthService()
-                                  .signOut(); // Sign out the user
-                              // Navigate to SignIn screen and remove all previous routes from the stack
+                              // Clear SharedPreferences (e.g., login status, UID, etc.)
+                              await PreferencesHelper.clearUser();
+
+                              // Navigate to home screen (or login)
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => MyApp(),
-                                ), // Push SignIn screen
-                                (Route<dynamic> route) =>
-                                    false, // Remove all previous routes
+                                ),
+                                (Route<dynamic> route) => false,
                               );
                             },
                             child: Container(
@@ -438,16 +443,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                                 ),
                                 trailing: Icon(Icons.logout, color: Colors.red),
                                 onTap: () async {
-                                  await AuthService()
-                                      .signOut(); // Sign out the user
-                                  // Navigate to SignIn screen and remove all previous routes from the stack
+                                  // Clear SharedPreferences (e.g., login status, UID, etc.)
+                                  await PreferencesHelper.clearUser();
+
+                                  // Navigate to home screen (or login)
                                   Navigator.pushAndRemoveUntil(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => MyApp(),
-                                    ), // Push SignIn screen
-                                    (Route<dynamic> route) =>
-                                        false, // Remove all previous routes
+                                    ),
+                                    (Route<dynamic> route) => false,
                                   );
                                 },
                               ),
