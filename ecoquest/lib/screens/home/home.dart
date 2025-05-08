@@ -206,11 +206,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   String status = "Checking sensor...";
   late Stream<StepCount> _stepCountStream;
 
+  late StreamController<int> _waterStreamController;
+  Timer? _waterPollingTimer;
+  int _lastFetchedWater = 0;
+
   @override
   void initState() {
     super.initState();
     checkUserTreeStatus(); // Check user tree status on load
     loadUserId(); // Load user ID from shared preferences
+    _waterStreamController = StreamController<int>.broadcast();
+    startWaterPolling();
+
     _initPedometerState();
     _scheduleMidnightReset(); // Schedule midnight reset for steps
     _progressController = AnimationController(
@@ -238,6 +245,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   void dispose() {
     _progressController.dispose();
     _dropController.dispose();
+    _waterPollingTimer?.cancel();
+    _waterStreamController.close();
+    _stepCountStream.drain(); // Close the stream to prevent memory leaks
     super.dispose();
   }
 
@@ -248,21 +258,398 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     }
   }
 
+  void startWaterPolling() {
+    _waterPollingTimer?.cancel(); // prevent multiple timers
+    _waterPollingTimer = Timer.periodic(const Duration(seconds: 5), (
+      timer,
+    ) async {
+      final response = await http.post(
+        Uri.parse("https://ecoquest.ruputech.com/get_water_balance.php"),
+        body: {"uid": userId},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data["success"]) {
+          final newWater = data["water"];
+          if (newWater != _lastFetchedWater) {
+            _lastFetchedWater = newWater;
+            _waterStreamController.add(newWater);
+          }
+        }
+      }
+    });
+  }
+
+  void showDailyTaskDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            height: screenHeight * 0.8,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Color.fromRGBO(232, 209, 183, 0.95),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Color(0xFF8B4513), width: 3),
+            ),
+            child: Column(
+              children: [
+                // Header
+                Stack(
+                  children: [
+                    Center(
+                      child: Text(
+                        "Tasks",
+                        style: TextStyle(
+                          color: Colors.brown[800],
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.red,
+                          ),
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 25,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Scrollable body
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        buildTaskItem("🌱 Water a tree", true),
+                        buildTaskItem("👣 Reach 5,000 steps", false),
+                        buildTaskItem("👥 Visit 3 friends", false),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAchievements(String uid) async {
+    final res = await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/get_user_achievements.php"),
+      body: {"uid": uid},
+    );
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data["success"]) {
+        return List<Map<String, dynamic>>.from(data["achievements"]);
+      }
+    }
+    return [];
+  }
+
+  void handleAchievementClaim(String achievementId, int reward) async {
+    final res = await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/claim_achievement_reward.php"),
+      body: {"uid": userId, "achievement_id": achievementId},
+    );
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data["success"]) {
+        // refresh water balance
+        await fetchWaterBalance();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(data["message"])));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data["message"] ?? "Already claimed.")),
+        );
+      }
+    }
+  }
+
+  void showAchievementsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final screenHeight = MediaQuery.of(context).size.height;
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            height: screenHeight * 0.8,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Color.fromRGBO(232, 209, 183, 0.95),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Color(0xFF8B4513), width: 3),
+            ),
+            child: Column(
+              children: [
+                // Header
+                Stack(
+                  children: [
+                    Center(
+                      child: Text(
+                        "Achievements",
+                        style: TextStyle(
+                          color: Colors.brown[800],
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.red,
+                          ),
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 25,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Scrollable body
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: FutureBuilder<List<Map<String, dynamic>>>(
+                      future: fetchAchievements(userId),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData)
+                          return const CircularProgressIndicator();
+
+                        final achievements = snapshot.data!;
+                        return GridView.builder(
+                          itemCount: achievements.length,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 10,
+                                mainAxisSpacing: 10,
+                              ),
+                          itemBuilder: (context, index) {
+                            final a = achievements[index];
+                            final completed = a['status'] == 'Completed';
+
+                            return GestureDetector(
+                              onTap: () {
+                                if (completed)
+                                  handleAchievementClaim(
+                                    a['id'].toString(),
+                                    a['reward'],
+                                  );
+                              },
+                              child: Column(
+                                children: [
+                                  Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 30,
+                                        backgroundColor: Colors.green[100],
+                                        backgroundImage:
+                                            a['img'] != null
+                                                ? NetworkImage(a['img'])
+                                                : null,
+                                        child:
+                                            a['img'] == null
+                                                ? const Icon(Icons.emoji_events)
+                                                : null,
+                                      ),
+                                      if (!completed)
+                                        Container(
+                                          width: 60,
+                                          height: 60,
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(
+                                              0.5,
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    a['title'],
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color:
+                                          completed
+                                              ? Colors.black
+                                              : Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget buildAchievement(String title, String emoji) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(
+          radius: 30,
+          backgroundColor: Colors.green[100],
+          child: Text(emoji, style: const TextStyle(fontSize: 24)),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget buildTaskItem(String title, bool canClaim) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 5,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+
+          // Progress & Claim Row
+          Row(
+            children: [
+              // Progress bar
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: canClaim ? 1.0 : 0.4,
+                  backgroundColor: Colors.grey[300],
+                  color: canClaim ? Colors.brown : Colors.grey,
+                  minHeight: 10,
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              // Claim button
+              ElevatedButton(
+                onPressed: canClaim ? () => print('Claimed $title') : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      canClaim ? const Color(0xFF8B4513) : Colors.grey,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text("Claim"),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   void _scheduleMidnightReset() {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(
+      const Duration(hours: 8),
+    ); // Malaysia time
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final durationUntilMidnight = tomorrow.difference(now);
-    //final durationUntilMidnight = Duration(seconds: 15);  //testing
 
     Timer(durationUntilMidnight, () async {
       final prefs = await SharedPreferences.getInstance();
       todayFirstLogin = true; // Reset flag
 
       prefs.setInt('yesterdaySteps', _steps);
-
       prefs.remove(
         'lastLoginDate',
       ); // Remove so it reinitializes on next step event
+
       _initPedometerState(); // Re-run setup to capture new base steps
       _scheduleMidnightReset(); // Schedule again for next day
     });
@@ -404,41 +791,47 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     String? uid = await PreferencesHelper.getUserID();
     if (uid == null) return;
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
     final today = DateFormat('yyyy-MM-dd').format(now);
+    final yesterday = DateFormat(
+      'yyyy-MM-dd',
+    ).format(now.subtract(const Duration(days: 1)));
 
-    // Get last login date and saved base steps from shared preferences
-    String? lastLoginDate = await PreferencesHelper.getLastLoginDate();
-    int baseSteps = await PreferencesHelper.getBaseSteps() ?? 0;
+    // 1. Get yesterday's saved steps from server
+    int yesterdaySteps = 0;
+    try {
+      final res = await http.post(
+        Uri.parse("https://ecoquest.ruputech.com/get_yesterday_steps.php"),
+        body: {"uid": uid, "date": yesterday},
+      );
 
-    int todaySteps;
-
-    if (lastLoginDate != today) {
-      // First time today: reset base steps
-      baseSteps = event.steps;
-      todaySteps = 0;
-      await PreferencesHelper.setBaseSteps(baseSteps);
-      await PreferencesHelper.setLastLoginDate(today);
-    } else {
-      // Calculate steps based on baseSteps
-      todaySteps = event.steps - baseSteps;
-      if (todaySteps < 0) todaySteps = 0;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data["success"]) {
+          yesterdaySteps = data["steps"] ?? 0;
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to fetch yesterday steps: $e");
     }
 
-    // Convert to points (optional)
-    final points = StepConversion.convertSteps(todaySteps).points;
+    // 2. Calculate steps from device
+    int todayRawSteps = event.steps;
+    int todaySteps = todayRawSteps - yesterdaySteps;
+    if (todaySteps < 0) todaySteps = 0;
 
-    // ✅ Update UI
+    // 3. Update UI
+    final points = StepConversion.convertSteps(todaySteps).points;
     setState(() {
       _steps = todaySteps;
       _points = points;
     });
 
-    // ✅ Send to server
+    // 4. Send today’s raw steps (not the diff) to server
     try {
       await http.post(
         Uri.parse('https://ecoquest.ruputech.com/add_or_update_steps.php'),
-        body: {'uid': uid, 'steps': todaySteps.toString()},
+        body: {'uid': uid, 'steps': todayRawSteps.toString(), 'date': today},
       );
     } catch (e) {
       debugPrint("🚫 Failed to send steps: $e");
@@ -480,7 +873,11 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               }
 
               List<Map<String, dynamic>> friendSteps = snapshot.data!;
-              friendSteps.sort((a, b) => b['steps'].compareTo(a['steps']));
+              friendSteps.sort((a, b) {
+                int aSteps = int.tryParse(a['steps'].toString()) ?? 0;
+                int bSteps = int.tryParse(b['steps'].toString()) ?? 0;
+                return bSteps.compareTo(aSteps);
+              });
 
               return Container(
                 width: screenWidth * 0.8,
@@ -1089,7 +1486,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(
-                          children: [const Text('Water'), Text('$waterNum ml')],
+                          children: [
+                            const Text('Water'),
+                            StreamBuilder<int>(
+                              stream: _waterStreamController.stream,
+                              initialData: waterNum,
+                              builder: (context, snapshot) {
+                                final updatedWater = snapshot.data ?? waterNum;
+                                return Text('$updatedWater ml');
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -1114,7 +1521,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           width: 64,
                           height: 64,
                         ),
-                        onPressed: _onWaterPressed, //change afterward
+                        onPressed: showAchievementsDialog, //change afterward
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1149,7 +1556,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           width: 64,
                           height: 64,
                         ),
-                        onPressed: _onWaterPressed, //change afterward
+                        onPressed: showDailyTaskDialog, //change afterward
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1261,7 +1668,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Text(
-                  "Step: $_steps",
+                  "Step",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 35,
@@ -1270,7 +1677,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ),
                 SizedBox(width: screenWidth * 0.1),
                 StepProgressBarWidget(
-                  progress: (_steps / 10000).clamp(0.0, 1.0),
+                  progress: (_steps / 20000).clamp(0.0, 1.0),
                 ),
               ],
             ),

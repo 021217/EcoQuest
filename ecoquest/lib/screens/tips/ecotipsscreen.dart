@@ -1,3 +1,4 @@
+import 'package:ecoquest/screens/tips/ecoquestion.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -94,9 +95,13 @@ class _EcoTipsScreenState extends State<EcoTipsScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text("Close"),
+                        Text(
+                          "Click outside to close",
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -126,6 +131,18 @@ class _EcoTipsScreenState extends State<EcoTipsScreen> {
         backgroundColor: const Color.fromRGBO(182, 140, 96, 1),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.quiz, size: 32, color: Colors.black),
+            tooltip: 'Question of the Day',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => QuestionOfTheDayPage()),
+              );
+            },
+          ),
+        ],
       ),
       body:
           isLoading
