@@ -19,6 +19,10 @@
         <!-- For accessing photo gallery (Android 10+) -->
         <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:maxSdkVersion="33" />
         <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:maxSdkVersion="33" />
+
+        <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+        <uses-permission android:name="android.permission.BODY_SENSORS" />
+        
     <application
         android:label="ecoquest"
         android:name="${applicationName}"

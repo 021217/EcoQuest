@@ -7,6 +7,8 @@ class PreferencesHelper {
   static const String _userIDKey = 'userID';
   static const String _userNameKey = 'userName';
   static const String _profilePicKey = 'profilePic';
+  static const String _baseStepsKey = 'baseSteps';
+  static const String _lastLoginDateKey = 'lastLoginDate';
 
   /// ✅ Save audio setting
   static Future<void> setAudioEnabled(bool isEnabled) async {
@@ -87,5 +89,29 @@ class PreferencesHelper {
     await prefs.remove(_userIDKey);
     await prefs.remove(_userNameKey);
     await prefs.remove(_profilePicKey);
+  }
+
+  /// ✅ Save base step count
+  static Future<void> setBaseSteps(int steps) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_baseStepsKey, steps);
+  }
+
+  /// ✅ Get base step count
+  static Future<int?> getBaseSteps() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_baseStepsKey);
+  }
+
+  /// ✅ Save last login date (YYYY-MM-DD)
+  static Future<void> setLastLoginDate(String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastLoginDateKey, date);
+  }
+
+  /// ✅ Get last login date
+  static Future<String?> getLastLoginDate() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lastLoginDateKey);
   }
 }
