@@ -3,14 +3,26 @@ import 'package:ecoquest/screens/profile/profilesettingsscreen.dart';
 import 'package:ecoquest/screens/social/friendlistscreen.dart';
 import 'package:ecoquest/screens/tips/ecotipsscreen.dart';
 import 'package:flutter/material.dart';
-import 'package:ecoquest/services/auth.dart';
-import 'package:ecoquest/model/user.dart';
+import 'package:intl/intl.dart';
 
-class HomeScreen extends StatefulWidget {
+void main() {
+  runApp(const HomeScreen());
+}
+
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  // This widget is the root of your application.
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'EcoQuest',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      ),
+      home: const MyHomePage(title: 'EcoQuest'),
+    );
+  }
 }
 
 class ProgressBarWidget extends StatelessWidget {
@@ -66,10 +78,11 @@ class ProgressBarWidget extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
-                Icon(Icons.circle, size: 20, color: Colors.green), // Seed
+                Icon(Icons.egg, size: 20, color: Colors.green), // Seed
                 Icon(Icons.grass, size: 20, color: Colors.green), // Sprout
-                Icon(Icons.nature, size: 20, color: Colors.green), // Sapling
-                Icon(Icons.eco, size: 20, color: Colors.green), // Tree
+                Icon(Icons.eco, size: 20, color: Colors.green), // Sapling
+                Icon(Icons.nature, size: 20, color: Colors.green), // Tree
+                Icon(Icons.park, size: 20, color: Colors.green), // Mature
               ],
             ),
           ),
@@ -136,30 +149,109 @@ class StepProgressBarWidget extends StatelessWidget {
   }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  AuthService _authService = AuthService();
-  String userName = "Loading...";
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   int _selectedIndex = 2;
-  double _progress = 0.75;
+  double _progress = 0.0;
+  int waterNum = 200000;
+  final TextEditingController _treeNameController = TextEditingController(
+    text: "My Tree",
+  );
+  late AnimationController _progressController;
+  late AnimationController _dropController;
+  late Animation<double> _progressAnimation;
+  late Animation<double> _opacityAnimation;
+  late Animation<Offset> _dropOffset;
+
+  bool showDrop = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _dropController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+
+    _dropOffset = Tween<Offset>(
+      begin: const Offset(0, 0),
+      end: const Offset(0, 2),
+    ).animate(CurvedAnimation(parent: _dropController, curve: Curves.easeOut));
+
+    _opacityAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _dropController, curve: Curves.easeOut));
   }
 
-  /// ✅ Fetch user data
-  Future<void> _loadUserData() async {
-    MyUser? user = await _authService.getUserData();
-    if (user != null) {
+  @override
+  void dispose() {
+    _progressController.dispose();
+    _dropController.dispose();
+    _treeNameController.dispose();
+    super.dispose();
+  }
+
+  void _onWaterPressed() {
+    if (waterNum >= 250 && _progress < 1.0) {
       setState(() {
-        userName = user.name;
+        waterNum -= 250;
       });
-    } else {
+
+      double targetProgress = (_progress + 0.05).clamp(0.0, 1.0);
+
+      _progressAnimation = Tween<double>(
+        begin: _progress,
+        end: targetProgress,
+      ).animate(
+        CurvedAnimation(parent: _progressController, curve: Curves.easeOut),
+      )..addListener(() {
+        setState(() {
+          _progress = _progressAnimation.value;
+        });
+      });
+
+      _progressController.forward(from: 0.0);
+
+      _dropController.forward(from: 0.0).whenComplete(() {
+        setState(() {
+          showDrop = false;
+        });
+      });
       setState(() {
-        userName = "User Not Found";
+        showDrop = true;
       });
     }
+  }
+
+  Widget _buildDropAnimation() {
+    if (!showDrop) return Container();
+
+    return SlideTransition(
+      position: _dropOffset,
+      child: FadeTransition(
+        opacity: _opacityAnimation,
+        child: Image.asset(
+          'assets/images/waterDrop.png',
+          width: 50,
+          height: 50,
+        ),
+      ),
+    );
   }
 
   //get time
@@ -172,7 +264,9 @@ class _HomeScreenState extends State<HomeScreen> {
     //int hour = 20; //handle time manually, for debug and testing purpose
 
     // Debug log to check time
-    //debugPrint("Current Malaysia Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)} (Hour: $hour)");
+    debugPrint(
+      "Current Malaysia Time: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(now)} (Hour: $hour)",
+    );
 
     return hour >= 6 && hour < 18; //daytime between 6am to 6pm
   }
@@ -208,12 +302,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // for futher development to update the progress
-  // void _updateProgress(double newProgress) {
-  //   setState(() {
-  //     _progress = newProgress;
-  //   });
-  // }
+  void _updateProgress(double newProgress) {
+    setState(() {
+      _progress = newProgress;
+    });
+  }
 
   String getImageForProgress() {
     if (_progress < 0.25) {
@@ -229,38 +322,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
     String bgImage =
-        isDayTime()
-            ? 'assets/images/DayBg.webp'
-            : 'assets/images/NightBg.webp'; // Switch images
+        isDayTime() ? 'assets/images/DayBg.webp' : 'assets/images/NightBg.webp';
     Color progressBarTextColor = isDayTime() ? Colors.black : Colors.white;
     String virtualTree = getImageForProgress();
+
     return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
-            // Background Image
+            // background image
             Positioned.fill(child: Image.asset(bgImage, fit: BoxFit.fill)),
 
-            // Ground Image at Bottom
+            // ground image
             Positioned(
-              bottom: 0, // Align to the bottom
+              bottom: 0,
               left: 0,
               right: 0,
               child: Image.asset(
                 'assets/images/Ground.webp',
-                fit: BoxFit.cover, // Make sure it covers the width
-                height: 500, // Adjust height as needed
+                fit: BoxFit.cover,
+                height: screenHeight * 0.5,
               ),
             ),
 
-            // Adjustable Positioned Container
+            // virtual tree image
             Positioned(
-              left: -42,
-              top: 145,
+              left: screenWidth * -0.1,
+              top: screenHeight * 0.25,
               child: Container(
-                width: 500,
-                height: 500,
+                width: screenWidth * 1.2,
+                height: screenHeight * 0.5,
                 color: Colors.transparent,
                 child: Center(
                   child: Align(
@@ -271,14 +366,179 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Foreground Content
+            Positioned(
+              left: screenWidth * 0.3,
+              top: screenHeight * 0.75,
+              child: Container(
+                width: screenWidth * 0.4,
+                height: screenHeight * 0.04,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: TextField(
+                    controller: _treeNameController,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Enter Tree Name',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            Positioned(
+              bottom: screenHeight * 0.090,
+              right: screenWidth * 0.025,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                    iconSize: 30,
+                    icon: Image.asset(
+                      'assets/images/wateringCan.png',
+                      width: 64,
+                      height: 64,
+                    ),
+                    onPressed: _onWaterPressed,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [const Text('Water'), Text('$waterNum ml')],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Positioned(
+              bottom: screenHeight * 0.090,
+              right: screenWidth * 0.745,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                    iconSize: 30,
+                    icon: Image.asset(
+                      'assets/images/achievement.png',
+                      width: 64,
+                      height: 64,
+                    ),
+                    onPressed: _onWaterPressed, //change afterward
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(children: [const Text('Achievement')]),
+                  ),
+                ],
+              ),
+            ),
+
+            Positioned(
+              bottom: screenHeight * 0.5,
+              right: screenWidth * 0.815,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                    iconSize: 30,
+                    icon: Image.asset(
+                      'assets/images/task.png',
+                      width: 64,
+                      height: 64,
+                    ),
+                    onPressed: _onWaterPressed, //change afterward
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(children: [const Text('Task')]),
+                  ),
+                ],
+              ),
+            ),
+
+            Positioned(
+              bottom: screenHeight * 0.5,
+              right: screenWidth * 0.025,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                    iconSize: 30,
+                    icon: Image.asset(
+                      'assets/images/leaderboard.png',
+                      width: 64,
+                      height: 64,
+                    ),
+                    onPressed: _onWaterPressed, //change afterward
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(children: [const Text('Leaderboard')]),
+                  ),
+                ],
+              ),
+            ),
+
+            Positioned(
+              top: 300,
+              left: 0,
+              right: 0,
+              child: Center(child: _buildDropAnimation()),
+            ),
+
+            // grown progress bar
             Center(
               child: Padding(
-                padding: const EdgeInsets.only(top: 50.0),
+                padding: EdgeInsets.only(top: screenHeight * 0.05),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: <Widget>[
-                    const SizedBox(height: 15),
+                    SizedBox(height: screenHeight * 0.02),
                     Text(
                       'Grown Progress',
                       style: TextStyle(
@@ -287,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 1),
+                    SizedBox(height: screenHeight * 0.005),
                     ProgressBarWidget(progress: _progress),
                   ],
                 ),
@@ -297,15 +557,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
-      // Add a Column to stack ProgressBar & Bottom Navigation
+      // StepBar + BottomNav
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Step Progress Container
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+            padding: EdgeInsets.symmetric(
+              vertical: screenHeight * 0.015,
+              horizontal: screenWidth * 0.05,
+            ),
             decoration: const BoxDecoration(
-              color: Color(0xFF8B4513), // Same as bottom nav bar
+              color: Color(0xFF8B4513),
               border: Border(
                 top: BorderSide(color: Colors.black, width: 2),
                 bottom: BorderSide(color: Colors.black, width: 2),
@@ -314,7 +576,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                // "Step" Label on the Left
                 const Text(
                   "Step",
                   style: TextStyle(
@@ -323,13 +584,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 40),
+                SizedBox(width: screenWidth * 0.1),
                 StepProgressBarWidget(progress: 0.50),
               ],
             ),
           ),
-
-          // Bottom Navigation Bar
           BottomNavigationBar(
             type: BottomNavigationBarType.fixed,
             backgroundColor: const Color(0xFF8B4513),
@@ -339,23 +598,23 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: _onItemTapped,
             items: const [
               BottomNavigationBarItem(
-                icon: Hero(tag: 'friends', child: Icon(Icons.group, size: 40)),
+                icon: Icon(Icons.group, size: 40),
                 label: 'Friends',
               ),
               BottomNavigationBarItem(
-                icon: Hero(tag: 'market', child: Icon(Icons.store, size: 40)),
+                icon: Icon(Icons.store, size: 40),
                 label: 'Market',
               ),
               BottomNavigationBarItem(
-                icon: Hero(tag: 'home', child: Icon(Icons.home, size: 40)),
+                icon: Icon(Icons.home, size: 40),
                 label: 'Home',
               ),
               BottomNavigationBarItem(
-                icon: Hero(tag: 'eco-tips', child: Icon(Icons.book, size: 40)),
+                icon: Icon(Icons.book, size: 40),
                 label: 'Eco Tips',
               ),
               BottomNavigationBarItem(
-                icon: Hero(tag: 'profile', child: Icon(Icons.person, size: 40)),
+                icon: Icon(Icons.person, size: 40),
                 label: 'Profile',
               ),
             ],
@@ -363,19 +622,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-
-    // return Scaffold(
-    //   appBar: AppBar(
-    //     title: Text('Home'),
-    //     centerTitle: true,
-    //     automaticallyImplyLeading: false,
-    //   ),
-    //   body: Center(
-    //     child: Text(
-    //       'Welcome, $userName!', // ✅ Display user's name
-    //       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-    //     ),
-    //   ),
-    // );
   }
 }
