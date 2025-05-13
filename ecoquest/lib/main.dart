@@ -8,7 +8,7 @@ import 'package:ecoquest/services/audiomanager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // ✅ Initialize Firebase
+
   runApp(const MyApp());
 }
 
@@ -70,6 +70,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         await AudioManager.playClickSound(); // ✅ Plays sound on every tap globally
       },
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         title: 'EcoQuest',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.brown),

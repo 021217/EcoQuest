@@ -1,6 +1,8 @@
+import 'package:ecoquest/services/sharedpreferences.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -12,11 +14,22 @@ class MarketplaceScreen extends StatefulWidget {
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
   List<Map<String, dynamic>> items = [];
   bool isLoading = true;
+  String userId = "";
 
   @override
   void initState() {
     super.initState();
+    loadUserData();
     fetchMarketplaceItems();
+  }
+
+  Future<void> loadUserData() async {
+    final uid = await PreferencesHelper.getUserID();
+    print("User ID: $uid");
+    setState(() {
+      userId = uid ?? "";
+    });
+    if (userId.isEmpty) return;
   }
 
   Future<void> fetchMarketplaceItems() async {
@@ -104,10 +117,38 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
                     // Confirm Button
                     ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(context); // Close dialog
-                        showSuccessSnackbar(item['title']);
+
+                        try {
+                          // 1. Call backend to get Stripe checkout session URL
+                          final response = await http.post(
+                            Uri.parse(
+                              'https://ecoquest.ruputech.com/create_payment_intent.php',
+                            ),
+                            body: {
+                              'title': item['title'],
+                              'cost': item['cost'].toString(),
+                            },
+                          );
+
+                          final data = jsonDecode(response.body);
+                          final checkoutUrl = data['url'];
+
+                          print("✅ Got checkout URL: $checkoutUrl");
+
+                          if (checkoutUrl != null &&
+                              checkoutUrl.toString().startsWith("https://")) {
+                            await launchUrl(Uri.parse(checkoutUrl));
+                          } else {
+                            showFailureSnackbar("Invalid checkout URL.");
+                          }
+                        } catch (e) {
+                          showFailureSnackbar("Payment failed: $e");
+                          print(e);
+                        }
                       },
+
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF8B4513),
                         padding: const EdgeInsets.symmetric(
@@ -130,6 +171,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           ),
         );
       },
+    );
+  }
+
+  void showFailureSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("❌ $message"),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
