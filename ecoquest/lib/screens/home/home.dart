@@ -204,9 +204,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   int _baseSteps = 0;
   int _yesterdaySteps = 0;
 
-  int _lastSensorSteps = 0;
-  int _lastActualSteps = 0;
-  int _lastSentRaw = 0;
   int _lastSentSteps = 0;
   DateTime _lastSentTime = DateTime.now();
 
@@ -798,57 +795,39 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     debugPrint('Step Count Event Triggered: ${event.steps}');
     final prefs = await SharedPreferences.getInstance();
     final userID = prefs.getString('userID') ?? 'userID';
-    final raw = event.steps;
     final now = DateTime.now();
-
     final stepDifference = event.steps - _lastSentSteps;
-    int actualSteps = event.steps - _baseSteps;
 
-    // 1) Detect reboot/sensor reset
-    if (raw < _lastSensorSteps) {
-      // preserve yesterday’s actual as offset
-      final newBase = raw - _lastActualSteps;
-      _baseSteps = newBase < 0 ? 0 : newBase;
-      await prefs.setInt('baseSteps', _baseSteps);
-    }
-
-    // 2) Calculate today’s actual steps
-    int actual = raw - _baseSteps;
-    actual = actual < 0 ? 0 : actual;
-
-    // 3) Throttle server sync: every 30s or 20 raw-step change
-    final diffRaw = raw - _lastSentRaw;
-    if (now.difference(_lastSentTime).inSeconds > 30 || diffRaw >= 20) {
-      _lastSentRaw = raw;
+    // Send to server if more than 30 seconds passed OR at least 20 steps more
+    if (now.difference(_lastSentTime).inSeconds > 30 || stepDifference >= 20) {
+      _lastSentSteps = event.steps;
       _lastSentTime = now;
 
-      // Send to server
       try {
-        final userID = prefs.getString('userID') ?? 'guest';
-        final resp = await http.post(
+        final response = await http.post(
           Uri.parse('https://ecoquest.ruputech.com/add_or_update_steps.php'),
-          body: {'user_id': userID, 'sensor_steps': actual.toString()},
+          body: {
+            'user_id': userID,
+            'sensor_steps': event.steps.toString(), // Send current raw steps
+          },
         );
-        if (resp.statusCode == 200) {
-          final data = json.decode(resp.body);
-          actual = data['adjusted_steps'] ?? actual;
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+
+          // The server returns the actual steps after adjustment
+          int adjustedSteps = data['adjusted_steps'] ?? 0;
+
+          setState(() {
+            _steps = adjustedSteps;
+          });
         } else {
-          debugPrint('Server error: ${resp.body}');
+          debugPrint('Server error: ${response.body}');
         }
       } catch (e) {
-        debugPrint('Sync error: $e');
+        debugPrint('Error syncing steps: $e');
       }
     }
-
-    // 4) Persist raw & actual for next event
-    await prefs.setInt('lastSensorSteps', raw);
-    await prefs.setInt('lastActualSteps', actual);
-
-    // 5) Update UI
-    setState(() {
-      _steps = actual;
-      status = "Sensor working – raw: $raw, today: $actual";
-    });
   }
 
   Future<List<Map<String, dynamic>>> fetchFriendSteps() async {
