@@ -203,10 +203,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   bool todayFirstLogin = false;
   int _baseSteps = 0;
   int _yesterdaySteps = 0;
-
-  int _lastSentSteps = 0;
-  DateTime _lastSentTime = DateTime.now();
-
   String status = "Checking sensor...";
   late Stream<StepCount> _stepCountStream;
 
@@ -792,41 +788,53 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   }
 
   void _onStepCount(StepCount event) async {
-    debugPrint('Step Count Event Triggered: ${event.steps}');
-    final prefs = await SharedPreferences.getInstance();
-    final userID = prefs.getString('userID') ?? 'userID';
-    final now = DateTime.now();
-    final stepDifference = event.steps - _lastSentSteps;
+    String? uid = await PreferencesHelper.getUserID();
+    if (uid == null) return;
 
-    // Send to server if more than 30 seconds passed OR at least 20 steps more
-    if (now.difference(_lastSentTime).inSeconds > 30 || stepDifference >= 20) {
-      _lastSentSteps = event.steps;
-      _lastSentTime = now;
+    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    final yesterday = DateFormat(
+      'yyyy-MM-dd',
+    ).format(now.subtract(const Duration(days: 1)));
 
-      try {
-        final response = await http.post(
-          Uri.parse('https://ecoquest.ruputech.com/add_or_update_steps.php'),
-          body: {
-            'user_id': userID,
-            'sensor_steps': event.steps.toString(), // Send current raw steps
-          },
-        );
+    // 1. Get yesterday's saved steps from server
+    int yesterdaySteps = 0;
+    try {
+      final res = await http.post(
+        Uri.parse("https://ecoquest.ruputech.com/get_yesterday_steps.php"),
+        body: {"uid": uid, "date": yesterday},
+      );
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-
-          // The server returns the actual steps after adjustment
-          int adjustedSteps = data['adjusted_steps'] ?? 0;
-
-          setState(() {
-            _steps = adjustedSteps;
-          });
-        } else {
-          debugPrint('Server error: ${response.body}');
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data["success"]) {
+          yesterdaySteps = data["steps"] ?? 0;
         }
-      } catch (e) {
-        debugPrint('Error syncing steps: $e');
       }
+    } catch (e) {
+      debugPrint("Failed to fetch yesterday steps: $e");
+    }
+
+    // 2. Calculate steps from device
+    int todayRawSteps = event.steps;
+    int todaySteps = todayRawSteps - yesterdaySteps;
+    if (todaySteps < 0) todaySteps = 0;
+
+    // 3. Update UI
+    final points = StepConversion.convertSteps(todaySteps).points;
+    setState(() {
+      _steps = todaySteps;
+      _points = points;
+    });
+
+    // 4. Send today’s raw steps (not the diff) to server
+    try {
+      await http.post(
+        Uri.parse('https://ecoquest.ruputech.com/add_or_update_steps.php'),
+        body: {'uid': uid, 'steps': todayRawSteps.toString(), 'date': today},
+      );
+    } catch (e) {
+      debugPrint("🚫 Failed to send steps: $e");
     }
   }
 
