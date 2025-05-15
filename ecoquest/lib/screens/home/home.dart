@@ -251,6 +251,15 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  Future<void> checkAchievements() async {
+    if (userId.isEmpty) return;
+    print("Checking achievements for user: $userId");
+    await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/check_achievements.php"),
+      body: {"uid": userId},
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -281,12 +290,54 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
   }
 
+  Future<Map<String, int>> fetchDailyTaskStatus(String uid) async {
+    final res = await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/get_daily_status.php"),
+      body: {"uid": uid},
+    );
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data["success"]) {
+        final tasks = data["tasks"];
+        return {
+          "daily_1": tasks["daily_1"] ?? 0,
+          "daily_2": tasks["daily_2"] ?? 0,
+        };
+      }
+    }
+    return {"daily_1": 0, "daily_2": 0};
+  }
+
+  Future<void> claimDaily(String taskType) async {
+    final res = await http.post(
+      Uri.parse("https://ecoquest.ruputech.com/claim_daily.php"),
+      body: {"uid": userId, "type": taskType},
+    );
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      if (data["success"]) {
+        await fetchWaterBalance(); // if it gives water
+        Navigator.pop(context);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(data["message"])));
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(data["message"])));
+      }
+    }
+  }
+
   void showDailyTaskDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
         final screenHeight = MediaQuery.of(context).size.height;
+
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -295,9 +346,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
             height: screenHeight * 0.8,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color.fromRGBO(232, 209, 183, 0.95),
+              color: const Color.fromRGBO(232, 209, 183, 0.95),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Color(0xFF8B4513), width: 3),
+              border: Border.all(color: const Color(0xFF8B4513), width: 3),
             ),
             child: Column(
               children: [
@@ -325,16 +376,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             shape: BoxShape.circle,
                             color: Colors.red,
                           ),
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: const Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 25,
-                            ),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
+                          child: const Icon(Icons.close, color: Colors.white),
                         ),
                       ),
                     ),
@@ -342,16 +384,40 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12),
 
-                // Scrollable body
+                // Tasks
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        buildTaskItem("🌱 Water a tree", true),
-                        buildTaskItem("👣 Reach 5,000 steps", false),
-                        buildTaskItem("👥 Visit 3 friends", false),
-                      ],
-                    ),
+                  child: FutureBuilder<Map<String, int>>(
+                    future: fetchDailyTaskStatus(userId),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData)
+                        return const CircularProgressIndicator();
+                      final taskStatus = snapshot.data!;
+                      final waterStatus = taskStatus['daily_1']!;
+                      final stepStatus = taskStatus['daily_2']!;
+
+                      return SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            buildTaskItem(
+                              icon: Icons.grass,
+                              title: "Water a tree",
+                              current: _progress >= 0.05 ? 1 : 0,
+                              target: 1,
+                              canClaim: waterStatus == 1,
+                              onClaim: () => claimDaily("daily_1"),
+                            ),
+                            buildTaskItem(
+                              icon: Icons.directions_walk,
+                              title: "Reach 5,000 steps",
+                              current: _steps,
+                              target: 5000,
+                              canClaim: stepStatus == 1,
+                              onClaim: () => claimDaily("daily_2"),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -377,7 +443,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     return [];
   }
 
-  void handleAchievementClaim(String achievementId, int reward) async {
+  void handleAchievementClaim(String achievementId) async {
     final res = await http.post(
       Uri.parse("https://ecoquest.ruputech.com/claim_achievement_reward.php"),
       body: {"uid": userId, "achievement_id": achievementId},
@@ -388,10 +454,24 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
       if (data["success"]) {
         // refresh water balance
         await fetchWaterBalance();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(data["message"])));
+
+        // 🎉 Show success alert
+        showDialog(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: const Text("🎉 Achievement Claimed!"),
+                content: Text(data["message"]),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text("OK"),
+                  ),
+                ],
+              ),
+        );
       } else {
+        // Show snackbar for error
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data["message"] ?? "Already claimed.")),
         );
@@ -470,71 +550,86 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                           return const CircularProgressIndicator();
 
                         final achievements = snapshot.data!;
-                        return GridView.builder(
+                        return ListView.builder(
                           itemCount: achievements.length,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
-                              ),
                           itemBuilder: (context, index) {
                             final a = achievements[index];
-                            final completed = a['status'] == 'Completed';
+                            bool completed = false;
+                            if (a['status'] == '1' || a['status'] == '2') {
+                              completed = true;
+                            }
 
                             return GestureDetector(
                               onTap: () {
-                                if (completed)
-                                  handleAchievementClaim(
-                                    a['id'].toString(),
-                                    a['reward'],
-                                  );
+                                if (completed) {
+                                  handleAchievementClaim(a['id'].toString());
+                                }
+                                print('ID: ${a['id'].toString()}');
                               },
-                              child: Column(
-                                children: [
-                                  Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 30,
-                                        backgroundColor: Colors.green[100],
-                                        backgroundImage:
-                                            a['img'] != null
-                                                ? NetworkImage(a['img'])
-                                                : null,
-                                        child:
-                                            a['img'] == null
-                                                ? const Icon(Icons.emoji_events)
-                                                : null,
-                                      ),
-                                      if (!completed)
-                                        Container(
-                                          width: 60,
-                                          height: 60,
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(
-                                              0.5,
-                                            ),
-                                            shape: BoxShape.circle,
-                                          ),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color:
+                                      completed
+                                          ? Colors.white
+                                          : Colors.grey[300],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Achievement icon
+                                    Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 30,
+                                          backgroundColor: Colors.green[100],
+                                          backgroundImage:
+                                              a['img'] != null
+                                                  ? NetworkImage(a['img'])
+                                                  : null,
+                                          child:
+                                              a['img'] == null
+                                                  ? const Icon(
+                                                    Icons.emoji_events,
+                                                  )
+                                                  : null,
                                         ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    a['title'],
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color:
-                                          completed
-                                              ? Colors.black
-                                              : Colors.grey,
+                                        if (!completed)
+                                          Container(
+                                            width: 60,
+                                            height: 60,
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withOpacity(
+                                                0.5,
+                                              ),
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                  ),
-                                ],
+
+                                    const SizedBox(width: 16),
+
+                                    // Title
+                                    Expanded(
+                                      child: Text(
+                                        a['title'],
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color:
+                                              completed
+                                                  ? Colors.black
+                                                  : Colors.grey,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
@@ -570,52 +665,51 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget buildTaskItem(String title, bool canClaim) {
+  Widget buildTaskItem({
+    required IconData icon,
+    required String title,
+    required int current,
+    required int target,
+    required bool canClaim,
+    required VoidCallback onClaim,
+  }) {
+    double progress = (current / target).clamp(0.0, 1.0);
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 5,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title
-          Text(
-            title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-
-          // Progress & Claim Row
           Row(
             children: [
-              // Progress bar
-              Expanded(
-                child: LinearProgressIndicator(
-                  value: canClaim ? 1.0 : 0.4,
-                  backgroundColor: Colors.grey[300],
-                  color: canClaim ? Colors.brown : Colors.grey,
-                  minHeight: 10,
+              Icon(icon, color: canClaim ? Colors.green : Colors.grey),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: canClaim ? Colors.black : Colors.grey[700],
                 ),
               ),
-
-              const SizedBox(width: 12),
-
-              // Claim button
+              const Spacer(),
               ElevatedButton(
-                onPressed: canClaim ? () => print('Claimed $title') : null,
+                onPressed: canClaim ? onClaim : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
-                      canClaim ? const Color(0xFF8B4513) : Colors.grey,
+                      canClaim ? const Color(0xFF8B4513) : Colors.grey[300],
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -624,10 +718,18 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
+                  elevation: 0,
                 ),
                 child: const Text("Claim"),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 8,
+            backgroundColor: Colors.grey[300],
+            color: canClaim ? const Color(0xFF8B4513) : Colors.grey,
           ),
         ],
       ),
@@ -706,7 +808,8 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
         this.userId = userId;
       });
 
-      // These must run AFTER state is set
+      await checkAchievements();
+
       await fetchActiveTreeId();
       await fetchTreeGrowth();
       await fetchWaterBalance();
